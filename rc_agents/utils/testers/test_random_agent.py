@@ -13,8 +13,10 @@ CSC370 Spring 2026
 
 from rc_agents.edge_ai.rcg_edge.agents.random_agent import RandomAgent
 from rc_agents.edge_ai.rcg_edge.agents.base import Action, StepResult
+from rc_agents.utils.logger import log_execution
 
 def test_random_agent_act_returns_valid_action():
+    log_execution("TEST_RUN", "test_random_agent_act_returns_valid_action")
     agent = RandomAgent()  # construct with no args
     result = agent.act(obs=0)  # simple observation - fixed positional/keyword argument issue
     assert isinstance(result, StepResult)  # type check verifies contract

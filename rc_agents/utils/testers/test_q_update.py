@@ -13,6 +13,7 @@ import numpy as np
 
 from rc_agents.edge_ai.rcg_edge.agents.base import Action
 from rc_agents.edge_ai.rcg_edge.agents.q_agent import QAgent, QConfig
+from rc_agents.utils.logger import log_execution
 
 def test_q_update_basic_nonterminal():
     """
@@ -20,6 +21,7 @@ def test_q_update_basic_nonterminal():
     Q(s,a) <- Q(s,a) + alpha * (target - Q(s,a))
     where target = r + gamma * max_a' Q(s', a')
     """
+    log_execution("TEST_RUN", "test_q_update_basic_nonterminal")
     cfg = QConfig(alpha=0.5, gamma=0.9, epsilon=0.0)
     agent = QAgent(config=cfg, seed=123)
 
@@ -50,6 +52,7 @@ def test_q_update_terminal_sets_target_to_reward_only():
     """
     If done=True, target should be reward only (no bootstrap from next state).
     """
+    log_execution("TEST_RUN", "test_q_update_terminal_sets_target_to_reward_only")
     cfg = QConfig(alpha=0.5, gamma=0.9, epsilon=0.0)
     agent = QAgent(config=cfg, seed=123)
 

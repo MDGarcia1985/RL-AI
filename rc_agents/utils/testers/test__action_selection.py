@@ -13,9 +13,11 @@ import numpy as np
 
 from rc_agents.edge_ai.rcg_edge.agents.base import Action
 from rc_agents.edge_ai.rcg_edge.agents.q_agent import QAgent, QConfig
+from rc_agents.utils.logger import log_execution
 
 
 def test_act_exploit_picks_argmax_action_when_epsilon_zero():
+    log_execution("TEST_RUN", "test_act_exploit_picks_argmax_action_when_epsilon_zero")
     cfg = QConfig(alpha=0.1, gamma=0.9, epsilon=0.0)  # always exploit
     agent = QAgent(config=cfg, seed=42)
 
@@ -33,6 +35,7 @@ def test_act_exploit_picks_argmax_action_when_epsilon_zero():
 
 
 def test_act_explore_returns_valid_action_when_epsilon_one():
+    log_execution("TEST_RUN", "test_act_explore_returns_valid_action_when_epsilon_one")
     cfg = QConfig(alpha=0.1, gamma=0.9, epsilon=1.0)  # always explore
     agent = QAgent(config=cfg, seed=123)
 
