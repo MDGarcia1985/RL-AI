@@ -6,7 +6,7 @@ michael@mandedesign.studio
 
 ## Overview
 
-A professional Python package for reinforcement learning agents designed for grid-based navigation tasks. This package serves as the foundation for the RC Guardian autonomous vehicle project, implementing Q-learning algorithms with proper software engineering practices.
+A Python package for reinforcement learning agents designed for grid-based navigation tasks. This package serves as the foundation for the RC Guardian autonomous vehicle project, implementing Q-learning algorithms with proper software engineering practices.
 
 ## Features
 
@@ -136,6 +136,9 @@ pytest rc_agents/testers/
 ## Development Notes
 
 **pytest tutorial video**: https://youtu.be/EgpLj86ZHFQ?si=KGs2Uu_7bR09LsnI
+
+**heat map tutorial**
+https://www.geeksforgeeks.org/machine-learning/q-learning-in-python/
 
 **Design Principles:**
 - Protocol-based interfaces for flexibility

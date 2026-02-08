@@ -1,11 +1,9 @@
 """
+UI __init__.py
+
 Copyright (c) 2026 Michael Garcia, M&E Design
 https://mandedesign.studio
 michael@mandedesign.studio
 
 CSC370 Spring 2026
 """
-
-# Create 'from' path for dependencies
-from .grid_env import GridEnv, GridConfig
-__all__ = ["GridEnv", "GridConfig"]

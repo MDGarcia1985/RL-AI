@@ -1,3 +1,9 @@
+# /// script
+# requires-python = ">=3.13"
+# dependencies = [
+#     "numpy>=2.4.2",
+# ]
+# ///
 """
 __main__.py
 
@@ -21,11 +27,31 @@ from rc_agents.utils.logger import log_execution
 
 def main() -> None:
     log_execution("MAIN_RUN", "Training started")
+
+    print("RC Sentry ACTIVATED. Patrol initiated.")
     
-    env = GridEnv(GridConfig(rows=5, cols=5, start=(0, 0), goal=(4, 4)))
+    env = GridEnv(GridConfig(rows=20, cols=20, start=(0, 0), goal=(4, 4)))
     agent = QAgent(QConfig(alpha=0.5, gamma=0.9, epsilon=0.1), seed=123)
 
-    results = run_training(env=env, agent=agent, episodes=50, max_steps=200)
+    from rc_agents.config.ui_config import TrainingUIConfig
+
+    cfg = TrainingUIConfig(
+        episodes=50,
+        max_steps=200,
+        rows=20,
+        cols=20,
+        start=(0, 0),
+        goal=(4, 4),
+        alpha=0.5,
+        gamma=0.9,
+        epsilon=0.1,
+        seed=123,
+    )
+
+    env = GridEnv(cfg.to_grid_config())
+    agent = QAgent(cfg.to_q_config(), seed=cfg.seed)
+
+    results = run_training(env=env, agent=agent, cfg=cfg)
 
     wins = sum(1 for r in results if r.reached_goal)
     print(f"Reached goal: {wins}/{len(results)}")

@@ -6,15 +6,69 @@ Minimal Tkinter GUI to run training and display results.
 
 from __future__ import annotations
 
+import numpy as np
+import matplotlib.pyplot as plt
 import tkinter as tk
-from tkinter import ttk, messagebox
 
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from tkinter import ttk, messagebox
 from rc_agents.envs.grid_env import GridEnv, GridConfig
 from rc_agents.edge_ai.rcg_edge.agents.q_agent import QAgent, QConfig
 from rc_agents.edge_ai.rcg_edge.runners.train_runner import run_training
-
+from rc_agents.config.ui_config import TrainingUIConfig
 
 class TrainerGUI:
+    def _show_q_heatmap(self, env: GridEnv, agent: QAgent) -> None:
+        """
+        Visualize the learned Q-values as a grid.
+        Each cell shows max_a Q(s,a) for that state.
+        Unvisited states will display as NaN (blank/neutral).
+        """
+        rows = env.config.rows
+        cols = env.config.cols
+
+        # Build a grid of max Q-values per state
+        q_values_grid = np.full((rows, cols), np.nan, dtype=float)
+
+        for r in range(rows):
+            for c in range(cols):
+                s = (r, c)
+                if s in agent.q_table:
+                    q_values_grid[r, c] = float(np.max(agent.q_table[s]))
+
+        # Create a new Tk window for the plot
+        win = tk.Toplevel(self.root)
+        win.title("Learned Q-values (max over actions)")
+
+        fig = Figure(figsize=(6, 6), dpi=100)
+        ax = fig.add_subplot(111)
+
+        im = ax.imshow(q_values_grid, cmap="coolwarm", interpolation="nearest")
+        fig.colorbar(im, ax=ax, label="Q-value (max_a)")
+
+        ax.set_title("Learned Q-values for Each State (max over actions)")
+        ax.set_xticks(np.arange(cols))
+        ax.set_yticks(np.arange(rows))
+        ax.invert_yaxis()
+
+        # Optional: grid lines
+        ax.set_xticks(np.arange(-0.5, cols, 1), minor=True)
+        ax.set_yticks(np.arange(-0.5, rows, 1), minor=True)
+        ax.grid(which="minor", linestyle="-", linewidth=0.5)
+        ax.tick_params(which="minor", bottom=False, left=False)
+
+        # Annotate each cell
+        for i in range(rows):
+            for j in range(cols):
+                v = q_values_grid[i, j]
+                if not np.isnan(v):
+                    ax.text(j, i, f"{v:.2f}", ha="center", va="center", color="black")
+
+        canvas = FigureCanvasTkAgg(fig, master=win)
+        canvas.draw()
+        canvas.get_tk_widget().pack(fill="both", expand=True)
+
     def __init__(self) -> None:
         self.root = tk.Tk()
         self.root.title("CSC370 Q-Learning Trainer")
@@ -66,10 +120,25 @@ class TrainerGUI:
             messagebox.showerror("Input error", "Please enter valid numeric values.")
             return
 
-        env = GridEnv(GridConfig(rows=5, cols=5, start=(0, 0), goal=(4, 4)))
-        agent = QAgent(QConfig(alpha=alpha, gamma=gamma, epsilon=epsilon), seed=123)
+        cfg = TrainingUIConfig(
+            episodes=episodes,
+            max_steps=max_steps,
+            alpha=alpha,
+            gamma=gamma,
+            epsilon=epsilon,
+            rows=5,
+            cols=5,
+            start=(0, 0),
+            goal=(4, 4),
+            seed=123,
+        )
 
-        results = run_training(env=env, agent=agent, episodes=episodes, max_steps=max_steps)
+        env = GridEnv(cfg.to_grid_config())
+        agent = QAgent(cfg.to_q_config(), seed=cfg.seed)
+
+        results = run_training(env=env, agent=agent, cfg=cfg)
+
+        self._show_q_heatmap(env, agent)
 
         wins = sum(1 for r in results if r.reached_goal)
         avg_steps = sum(r.steps for r in results) / len(results)

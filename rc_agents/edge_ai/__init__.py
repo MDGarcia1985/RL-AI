@@ -5,7 +5,3 @@ michael@mandedesign.studio
 
 CSC370 Spring 2026
 """
-
-# Create 'from' path for dependencies
-from .grid_env import GridEnv, GridConfig
-__all__ = ["GridEnv", "GridConfig"]

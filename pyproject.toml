@@ -1,0 +1,20 @@
+[project]
+name = "assignment-3-1"
+version = "0.1.0"
+description = "This is a reinforcement learning package to use with a UGV RC car"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [    
+    "numpy",
+    "matplotlib",
+    "streamlit",
+    ]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["rc_agents*"]
+exclude = ["archive*"]

@@ -14,7 +14,7 @@ CSC370 Spring 2026
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass #dataclass gives a structured return type for act()
 from typing import Any, Dict, Hashable #Hashable allows us to safely key the Q-table by state.
 
 import numpy as np #used for fast argmax, arrays, and stable math.
