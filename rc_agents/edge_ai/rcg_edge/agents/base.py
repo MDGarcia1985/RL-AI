@@ -14,11 +14,11 @@ CSC370 Spring 2026
 
 from __future__ import annotations
 
-from dataclasses import dataclass # dataclass gives a structured return type for act()
-from enum import IntEnum # IntEnum gives us a typed action space
-from typing import Any, Dict, Protocol # Any lets obs be flexible without locking in too early
-# Dict is for info payloads
-# Protocol defines an interface without forcing inheritance
+from dataclasses import dataclass       # dataclass gives a structured return type for act()
+from enum import IntEnum                # IntEnum gives us a typed action space
+from typing import Any, Dict, Protocol  # Any lets obs be flexible without locking in too early
+                                        # Dict is for info payloads
+                                        # Protocol defines an interface without forcing inheritance
 
 # This is the start of a larger project for UGVs and other unmanned systems.
 # Therefore, I used class Action(IntEnum) in order to expand later.

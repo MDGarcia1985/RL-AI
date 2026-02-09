@@ -42,7 +42,7 @@ class RandomAgent:
     def act(self, obs: Any) -> StepResult:
         action = _ACTIONS[int(self.rng.integers(0, len(_ACTIONS)))]
         self.last_action = action
-        return StepResult(action=action, info={"policy": "random"})
+        return StepResult(action=action, info={"policy": "random","source": "numpy_rng"})
 
     def learn(
         self,
