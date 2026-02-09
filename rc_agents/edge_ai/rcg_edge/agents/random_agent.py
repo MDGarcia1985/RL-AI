@@ -24,21 +24,25 @@ from typing import Any
 
 from .base import Action, StepResult #imports shared actino space and results container from the base agent
 
-ACTION_VALUES = [a.value for a in Action] #a is shorthand for action
+_ACTIONS = tuple(Action)
 
-#creat a class of random agent
+# The random agent simply selects an action from the action space at random.
+# Mirrors the QAgent action-selection structure for consistency.
 class RandomAgent:
     """A random agent that selects actions uniformly at random."""
     name = "random"
 
+    def __init__(self, seed: int | None = None):
+        self.rng = np.random.default_rng(seed)
+        self.last_action: Action | None = None
+
     def reset(self) -> None:
-        # No reset needed for random agent
-        pass
+        self.last_action = None
 
     def act(self, obs: Any) -> StepResult:
-        """Choose an action uniformly at random"""
-        action = Action(np.random.choice(ACTION_VALUES))
-        return StepResult(action=action, info={"source": "numpy_rng"})
+        action = _ACTIONS[int(self.rng.integers(0, len(_ACTIONS)))]
+        self.last_action = action
+        return StepResult(action=action, info={"policy": "random"})
 
     def learn(
         self,

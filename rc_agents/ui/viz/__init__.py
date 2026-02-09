@@ -1,7 +1,8 @@
 """
-viz init file
+init file for ui/viz package
 
-used for package import paths
+__init__.py file creates a package for this folder as well as
+package import paths.
 
 Copyright (c) 2026 Michael Garcia, M&E Design
 https://mandedesign.studio
@@ -18,3 +19,7 @@ __all__ = [
     "state_value_grid",
     "greedy_policy_grid",
 ]
+
+# Future note:
+# Visualization helpers may be split by domain (policy, value, debug)
+# if additional renderers are added.

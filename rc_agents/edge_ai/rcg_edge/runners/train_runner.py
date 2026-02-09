@@ -18,17 +18,30 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Protocol
 
 from rc_agents.config.ui_config import TrainingUIConfig
-from rc_agents.edge_ai.rcg_edge.agents.base import Action, StepResult
-
+from rc_agents.edge_ai.rcg_edge.agents import Action, StepResult
 
 class Env(Protocol):
-    """Minimal env protocol required by the runner."""
-    def reset(self) -> Any: ...
-    # Starts a new episode
-    # Returns initial observation (obs)
-    # Note: the type of obs is intentionally left generic (any)
-    def step(self, action: int) -> tuple[Any, float, bool, Dict[str, object]]: ...
-    # Takes an action and returns (next_obs, reward, done, info)
+    """
+    Minimal environment interface required by the training runner.
+
+    NOTE:
+    - This interface mirrors classic Gym-style environments.
+    - Observation type is intentionally left generic (Any) to allow
+      different environment representations.
+    """
+
+    def reset(self) -> Any:
+        """
+        Start a new episode and return the initial observation.
+        """
+        ...
+
+    def step(self, action: int) -> tuple[Any, float, bool, Dict[str, object]]:
+        """
+        Apply an action and return:
+        (observation, reward, done, info)
+        """
+        ...
 
 @dataclass
 class EpisodeResult:
@@ -46,25 +59,33 @@ def run_training(
     """Run episodes of interaction between env and agent."""
     results: List[EpisodeResult] = []
 
-    # Optional deterministic seeding
-    # RNG seeding happens once per training run.
-    # Reseeding inside episodes or steps collapses the exploration
-    # and prevents meaningful learning.
+    # Optional deterministic seeding.
+    # RNG seeding is applied once per training run to ensure reproducibility
+    # while preserving stochastic exploration within episodes.
+    #
+    # NOTE:
+    # - Reseeding inside episodes or per step collapses exploration by
+    #   replaying identical action-selection sequences.
+    # - This can silently break ε-greedy or stochastic policies by making
+    #   learning appear deterministic.
+    #
+    # The environment may or may not support seeding; this is handled
+    # defensively to keep the runner generic.
     if cfg.seed is not None:
         try:
-            env.seed(cfg.seed)  # if the env supports it
+            env.seed(cfg.seed)  # Apply seed if the environment exposes a seed() method.
         except AttributeError:
             pass
 
     for ep in range(1, cfg.episodes + 1):
         obs = env.reset() # Starts a fresh episode.
-        agent.reset() #Starts a fresh episode for the agent.
+        agent.reset() # Starts a fresh episode for the agent.
 
-        total_reward = 0.0 # Resets rewaard accumulator for the episode.
+        total_reward = 0.0 # Resets reward accumulator for the episode.
         steps = 0
-        done = False # Tracks whether the epside has terminated.
+        done = False # Tracks whether the episode has terminated.
 
-        for _ in range(cfg.max_steps): # Safety limit and prevent infinite wandering.
+        for _ in range(cfg.max_steps): # Safety limit to prevent infinite wandering.
             steps += 1
 
             step_result: StepResult = agent.act(obs)
@@ -83,9 +104,12 @@ def run_training(
 
             obs = next_obs # Updates observation for next iteration.
             if done:
-                break # Breaks loop if goal or max steps is reached.
+                break # End episode early if terminal state is reached.
 
-        results.append(                     # 
+        # Record episode metrics for UI display and debugging.
+        results.append(
+            # NOTE: reached_goal currently mirrors `done` because the env only terminates on goal.
+            # If terminal failure states are added later, use `info` (e.g., info["reached_goal"])
             EpisodeResult(
                 episode=ep,
                 steps=steps,

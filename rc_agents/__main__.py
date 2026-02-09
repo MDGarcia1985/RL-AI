@@ -4,6 +4,8 @@
 #     "numpy>=2.4.2",
 # ]
 # ///
+# NOTE: PEP 723 script metadata (used by uv) for standalone execution.
+
 """
 __main__.py
 
@@ -19,22 +21,18 @@ CSC370 Spring 2026
 
 from __future__ import annotations
 
-from rc_agents.envs.grid_env import GridEnv, GridConfig
-from rc_agents.edge_ai.rcg_edge.agents.q_agent import QAgent, QConfig
-from rc_agents.edge_ai.rcg_edge.runners.train_runner import run_training
+from rc_agents.envs import GridEnv
+from rc_agents.edge_ai.rcg_edge.agents import QAgent
+from rc_agents.edge_ai.rcg_edge.runners import run_training
 from rc_agents.utils.logger import log_execution
+from rc_agents.config import TrainingUIConfig
 
-
+# Main execution function - minimal router for directing traffic.
 def main() -> None:
     log_execution("MAIN_RUN", "Training started")
-
     print("RC Sentry ACTIVATED. Patrol initiated.")
-    
-    env = GridEnv(GridConfig(rows=20, cols=20, start=(0, 0), goal=(4, 4)))
-    agent = QAgent(QConfig(alpha=0.5, gamma=0.9, epsilon=0.1), seed=123)
 
-    from rc_agents.config.ui_config import TrainingUIConfig
-
+    # NOTE: goal is intentionally close to start for fast smoke-test runs.
     cfg = TrainingUIConfig(
         episodes=50,
         max_steps=200,
@@ -48,14 +46,15 @@ def main() -> None:
         seed=123,
     )
 
+    # Use cfg as single source of truth.
     env = GridEnv(cfg.to_grid_config())
     agent = QAgent(cfg.to_q_config(), seed=cfg.seed)
 
+    # Run the shared training loop (package core logic).
     results = run_training(env=env, agent=agent, cfg=cfg)
-
     wins = sum(1 for r in results if r.reached_goal)
-    print(f"Reached goal: {wins}/{len(results)}")
     
+    print(f"Reached goal: {wins}/{len(results)}")
     log_execution("MAIN_COMPLETE", f"Training finished: {wins}/{len(results)} wins")
 
 

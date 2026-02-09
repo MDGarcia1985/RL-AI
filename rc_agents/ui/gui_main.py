@@ -2,22 +2,44 @@
 gui_main.py
 
 Minimal Tkinter GUI to run training and display results.
+
+Copyright (c) 2026 Michael Garcia, M&E Design
+https://mandedesign.studio
+michael@mandedesign.studio
+
+CSC370 Spring 2026
 """
 
 from __future__ import annotations
 
 import numpy as np
-import matplotlib.pyplot as plt
+# Reserved for future visualization work.
+# import matplotlib.pyplot as plt
 import tkinter as tk
 
+# Uses the package imports from __init__ packages.
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from tkinter import ttk, messagebox
-from rc_agents.envs.grid_env import GridEnv, GridConfig
-from rc_agents.edge_ai.rcg_edge.agents.q_agent import QAgent, QConfig
-from rc_agents.edge_ai.rcg_edge.runners.train_runner import run_training
-from rc_agents.config.ui_config import TrainingUIConfig
+from rc_agents.envs import GridEnv, GridConfig
+from rc_agents.edge_ai.rcg_edge.agents import QAgent, QConfig
+from rc_agents.edge_ai.rcg_edge.runners import run_training
+from rc_agents.config import TrainingUIConfig
 
+
+# TODO: Add a button to visualize the policy grid as arrows on top of the value grid.
+# TODO: Add a button to save the trained agent's Q-table to disk.
+# TODO: Add a button to load a pre-trained agent from disk.
+
+# Trainer visual interface
+# This GUI is a thin wrapper around the core training loop.
+# In order, this class:
+# 1. Builds a Tk window with training parameter inputs and a results panel.
+# 2. Reads user inputs and converts them into a TrainingUIConfig instance.
+# 3. Creates a GridEnv and QAgent from that config.
+# 4. Runs the shared training loop (run_training).
+# 5. Displays results in the text box and opens a separate matplotlib heatmap window
+#    showing max_a Q(s,a) per grid cell (a quick sanity-check visualization).
 class TrainerGUI:
     def _show_q_heatmap(self, env: GridEnv, agent: QAgent) -> None:
         """
@@ -28,13 +50,34 @@ class TrainerGUI:
         rows = env.config.rows
         cols = env.config.cols
 
-        # Build a grid of max Q-values per state
+        # Build a grid of max Q-values per state.
+        # Preallocate a grid matching the environment dimensions.
+        # Initialize with NaN ("Not a Number") so unvisited states render as blank/neutral
+        # in the heatmap (avoids implying confidence where no learning has occurred).
+        # Force float dtype (data type descriptor) so NaN is supported and learned Q-values
+        # retain fractional precision for correct matplotlib color scaling and allow
+        # non-integer values.
+        #
+        # NOTE on NaN and dtype:
+        # - "Not a Number" (NaN) represents a value that is undefined or meaningless
+        #   as a numeric quantity.
+        # - Examples of NaN include: 0.0 / 0.0, sqrt(-1) in the real number system,
+        #   np.nan, or float("nan").
+        # - NaN is a special floating-point value defined by the IEEE 754 standard.
+        # - NaN cannot be reliably compared using standard equality operators
+        #   (e.g., NaN == NaN is False).
+        # - Using a float dtype is required for NaN support and ensures proper
+        #   visualization of learned Q-values.
+        # - dtype explicitly defines the in-memory numeric type of each array element;
+        #   dtype=float enforces IEEE-754 floating-point semantics, allowing NaN
+        #   and fractional Q-values to be represented and visualized correctly.
         q_values_grid = np.full((rows, cols), np.nan, dtype=float)
 
         for r in range(rows):
             for c in range(cols):
                 s = (r, c)
                 if s in agent.q_table:
+                    # Heatmap value is max_a Q(s,a) for each state s (state-value proxy).
                     q_values_grid[r, c] = float(np.max(agent.q_table[s]))
 
         # Create a new Tk window for the plot
@@ -52,7 +95,7 @@ class TrainerGUI:
         ax.set_yticks(np.arange(rows))
         ax.invert_yaxis()
 
-        # Optional: grid lines
+        # Grid lines
         ax.set_xticks(np.arange(-0.5, cols, 1), minor=True)
         ax.set_yticks(np.arange(-0.5, rows, 1), minor=True)
         ax.grid(which="minor", linestyle="-", linewidth=0.5)
@@ -69,6 +112,7 @@ class TrainerGUI:
         canvas.draw()
         canvas.get_tk_widget().pack(fill="both", expand=True)
 
+    # Tkinter GUI setup
     def __init__(self) -> None:
         self.root = tk.Tk()
         self.root.title("CSC370 Q-Learning Trainer")
@@ -82,6 +126,7 @@ class TrainerGUI:
 
         self._build()
 
+    # Builds the main window widgets
     def _build(self) -> None:
         frm = ttk.Frame(self.root, padding=12)
         frm.pack(fill="both", expand=True)
@@ -109,6 +154,7 @@ class TrainerGUI:
         self.results_box = tk.Text(frm, height=12, width=60)
         self.results_box.pack(fill="both", expand=True, pady=(6, 0))
 
+    # Event handler for "Run Training" button
     def run_training_clicked(self) -> None:
         try:
             episodes = int(self.episodes_var.get())
@@ -116,10 +162,14 @@ class TrainerGUI:
             epsilon = float(self.epsilon_var.get())
             alpha = float(self.alpha_var.get())
             gamma = float(self.gamma_var.get())
+        #error handling
         except ValueError:
             messagebox.showerror("Input error", "Please enter valid numeric values.")
             return
 
+        #pull values from config file
+        # NOTE: Tk GUI currently uses a fixed 5x5 grid to keep the interface minimal.
+        # Streamlit UI supports variable grid sizing.
         cfg = TrainingUIConfig(
             episodes=episodes,
             max_steps=max_steps,
@@ -150,7 +200,7 @@ class TrainerGUI:
         self.results_box.insert(tk.END, f"Avg steps: {avg_steps:.2f}\n")
         self.results_box.insert(tk.END, f"Avg total reward: {avg_reward:.2f}\n\n")
 
-        # Show last few episodes as a quick sanity view
+        # Show last few episodes as a quick review
         self.results_box.insert(tk.END, "Last 10 episodes:\n")
         for r in results[-10:]:
             self.results_box.insert(
@@ -158,9 +208,10 @@ class TrainerGUI:
                 f"  ep {r.episode:>3}: steps={r.steps:>3} reward={r.total_reward:>6.1f} goal={r.reached_goal}\n",
             )
 
+    # Starts the GUI event loop
     def run(self) -> None:
         self.root.mainloop()
 
-
+# Small test to make sure everything imports correctly.
 if __name__ == "__main__":
     TrainerGUI().run()

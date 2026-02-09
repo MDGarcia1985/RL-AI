@@ -10,29 +10,40 @@ michael@mandedesign.studio
 
 CSC370 Spring 2026
 
-Actions: 
+Actions (current descrete IDs): 
     0 = FORWARD (up)
     1 = BACKWARD (down)
     2 = RIGHT
     3 = LEFT
 """
 
-# Naming convetion note:
-# - CamelCase for classes and type aliases
-# - snake_case for functions and variables
-# - ALL_CAPS for constants
-# The mixing reflects different semantic roles
+# TODO: Unify action definitions with the shared Action enum.
+# This environment currently defines its own integer action IDs.
+# In larger projects, prefer importing the shared Action enum
+# to avoid drift between environment logic, agents, and visualization.
+
+# TODO: Centralize and formalize action semantics.
+# Current action meanings:
+#     FORWARD  = move up one row
+#     BACKWARD = move down one row
+#     RIGHT    = move right one column
+#     LEFT     = move left one column
+#
+# These semantics are assumed by:
+# - GridEnv.step() transition logic
+# - Agent policy interpretation
+# - Policy and Q-value visualization
+#
+# In larger systems, action semantics should be defined in a single
+# shared location (e.g., the Action enum) to avoid drift.
+
 
 from __future__ import annotations
 
 from dataclasses import dataclass # @dataclass is a container for env config/state
-from typing import Dict, Tuple # typing hints for dictionaries and tuple
+from typing import Dict, Tuple # Type hints for dicts/tuples used in RL interfaces.
 
-import random # randomly determined sample from a probability distribution
-
-# Use built-in min/max instead of numpy for simple clipping
-# This removes the numpy dependency for this basic grid environment
-
+# Action definitions
 ACTION_FORWARD = 0
 ACTION_BACKWARD = 1
 ACTION_RIGHT = 2
@@ -73,7 +84,31 @@ class GridEnv: #defines env object
         # unpack current position
         row, col = self.pos
 
-        # compute new position based on action
+        # Compute new position based on the selected action.
+        #
+        # NOTE on action semantics (current implementation):
+        # - Grid coordinates are (row, col) with row 0 at the top.
+        # - FORWARD/BACKWARD move along the row axis.
+        # - LEFT/RIGHT move along the column axis.
+        #
+        # INVARIANT:
+        # - This mapping defines the environment's transition model.
+        # - Any change here alters the meaning of actions system-wide
+        #   (learning, policy evaluation, and visualization).
+        #
+        # TODO (see action semantics TODO above):
+        # - Action meanings are currently duplicated here as implicit logic.
+        # - In future refactors, action semantics should be centralized
+        #   (e.g., in the Action enum) and consumed here.
+        #
+        # NOTE on future refactor (diagonal / half-step actions):
+        # - If diagonal actions are added (e.g., NW, NE, SW, SE), replace this
+        #   conditional chain with an action → (d_row, d_col) mapping.
+        # - Example refactor pattern:
+        #       delta = ACTION_DELTAS[action]
+        #       row += delta[0]
+        #       col += delta[1]
+
         if action == ACTION_FORWARD:
             row -= 1
         elif action == ACTION_BACKWARD:
@@ -104,7 +139,11 @@ class GridEnv: #defines env object
         # Example:
         # Start (0,0) -> (1,0) -> (2,0) -> (3,0) -> Goal
         # rewards: -1 + -1 + -1 + -1 + 0 = -4.0 total
-        
+        #
+        # NOTE: Goal reward is 0.0 (not +N) to keep the objective "minimize steps"
+        # rather than "seek high positive reward." Both work; this keeps totals intuitive.
+
+
         done = False # default state is not done
 
         # check for goal

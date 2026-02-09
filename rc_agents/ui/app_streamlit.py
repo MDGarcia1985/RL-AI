@@ -11,23 +11,27 @@ CSC370 Spring 2026
 """
 from __future__ import annotations
 
-import streamlit as st # don't miss this. Everything with the "st." prefix is doing work for streamlit
-import pandas as pd # pd is pandas, used for dataframes
+import streamlit as st # Streamlit API; most "st.*" calls render UI or manage app state.
+import pandas as pd # Pandas; used for DataFrame tables in the UI.
 import matplotlib.pyplot as plt
 import numpy as np
 
-from rc_agents.ui.viz.q_table_viz import q_table_to_matrix, state_value_grid, greedy_policy_grid
-from rc_agents.edge_ai.rcg_edge.agents.base import Action
-from rc_agents.envs.grid_env import GridEnv
-from rc_agents.edge_ai.rcg_edge.agents.q_agent import QAgent
-from rc_agents.edge_ai.rcg_edge.runners.train_runner import run_training
-from rc_agents.config.ui_config import TrainingUIConfig
+# Uses the package imports from __init__ packages.
+from rc_agents.ui.viz import q_table_to_matrix, state_value_grid, greedy_policy_grid
+from rc_agents.edge_ai.rcg_edge.agents import Action, QAgent
+from rc_agents.edge_ai.rcg_edge.runners import run_training
+from rc_agents.envs import GridEnv
+from rc_agents.config import TrainingUIConfig
 
 st.set_page_config(page_title="RC Agents Trainer", layout="wide")
 
 st.title("CSC370 Q-Learning Trainer (Streamlit)")
 
+# TODO: Add a button to save the trained agent's Q-table to disk.
+# TODO: Add a button to load a pre-trained agent from disk.
 
+# Side-bar configuration.
+# I chose to use configurable interfaces for clarity and easy reading.
 def sidebar_config() -> TrainingUIConfig:
     cfg = TrainingUIConfig()
 
@@ -52,7 +56,16 @@ def sidebar_config() -> TrainingUIConfig:
 
 cfg = sidebar_config()
 
+# Main panel logic
 run = st.button("Run Training", type="primary")
+
+# when "Run Training" is pressed it
+# runs the training loop and displays results.
+# In order:
+# 1. Create environment and agent
+# 2. Run training loop
+# 3. Display results in a few different ways (summary, q-table, value grid, policy grid)
+# At the bottom is a UX improvement that limits visual clutter based on grid size.
 
 if run:
     env = GridEnv(cfg.to_grid_config())
@@ -61,7 +74,7 @@ if run:
     results = run_training(env=env, agent=agent, cfg=cfg)
 
     # Minimal results display
-    wins = sum(1 for r in results if r.reached_goal)
+    wins = sum(1 for r in results if r.reached_goal) # reached_goal is defined in train_runner>run_training
     st.success(f"Reached goal: {wins}/{len(results)}")
 
     st.write("Last 10 episodes:")
@@ -89,6 +102,7 @@ if run:
     fig.colorbar(im, ax=ax, label="V(s)")
 
     ax.set_title("Learned Values per Grid Cell")
+    # Align plot coordinates with (row, col) grid indexing (row 0 at top).
     ax.invert_yaxis()
 
     # ticks/grid only when readable
@@ -117,6 +131,19 @@ if run:
 
     # Map Action ordering to arrows.
     # list(Action) == [FORWARD, BACKWARD, RIGHT, LEFT]
+    #
+    # NOTE on future refactor (diagonal / half-step actions):
+    # - If diagonal actions are added (e.g., NW, NE, SW, SE), this mapping
+    #   must be extended with additional direction symbols.
+    # - Avoid relying on hard-coded indices; prefer resolving:
+    #       index -> Action enum -> visual symbol
+    # - Recommended refactor path:
+    #     * Extend the Action enum with diagonal directions.
+    #     * Replace index-based mapping with a dict keyed by Action name
+    #       (e.g., "NORTHWEST": "↖", "NORTHEAST": "↗", etc.).
+    #     * If GPS or heading-based guidance is added, compass directions
+    #       should become explicit rather than inferred.
+    # - This prevents silent misalignment if Action ordering changes.
     arrow_by_index = {
         0: "↑",  # FORWARD
         1: "↓",  # BACKWARD
@@ -124,7 +151,7 @@ if run:
         3: "←",  # LEFT
     }
 
-    # Draw policy arrows only when grid is readable
+    # Draw policy arrows only when grid is readable (less than 30x30 grid cells)
     # AND not already showing numeric values
     show_policy = (rows_i <= 30 and cols_i <= 30 and not show_cell_text)
 

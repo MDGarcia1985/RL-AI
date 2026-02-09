@@ -14,27 +14,58 @@ CSC370 Spring 2026
 
 from __future__ import annotations
 
-from dataclasses import dataclass #dataclass gives a structured return type for act()
-from enum import IntEnum #IntEnum gives us a typed action space
-from typing import Any, Dict, Protocol #Any lets obs be flexible without locking in too early
-#Dict is for info payloads
-#Protocol defines an interface without forcing inheritance
+from dataclasses import dataclass # dataclass gives a structured return type for act()
+from enum import IntEnum # IntEnum gives us a typed action space
+from typing import Any, Dict, Protocol # Any lets obs be flexible without locking in too early
+# Dict is for info payloads
+# Protocol defines an interface without forcing inheritance
 
-#this is the start of a larger project for UGVs and other unmanned systems.
-#Therefore, I used class Action(IntEnum) in order to expand later.
+# This is the start of a larger project for UGVs and other unmanned systems.
+# Therefore, I used class Action(IntEnum) in order to expand later.
 class Action(IntEnum):
-    """Discrete action space for grid movement (IntEnum for int compatibility)."""
+    """
+    Discrete action space for grid movement (IntEnum for int compatibility).
+    
+    IntEnum is used so actions remain type-safe while still being directly
+    usable as integers by environments and numpy indexing.
+    """
     FORWARD = 0
     BACKWARD = 1
     RIGHT = 2
     LEFT = 3
 
-@dataclass(frozen=True) #makes it so agents can't mutate results after returning
+# TODO: Prepare for diagonal / half-step actions.
+# This mapping is not yet used by step(), but exists to
+# define a single source of truth for action → movement deltas.
+# Future refactor will replace the conditional chain with this map.
+#
+# Example diagonal additions:
+#     NW = (-1, -1), NE = (-1, +1),
+#     SW = (+1, -1), SE = (+1, +1)
+# - NOTE: Action deltas are expressed in (d_row, d_col) grid coordinates.
+# - Think of deltas like chess moves:
+#   they describe how a piece moves from its current square,
+#   not an absolute destination.
+# - Grid convention: row 0 is the top; decreasing row moves "up".
+ACTION_DELTAS: dict[Action, tuple[int, int]] = {
+    Action.FORWARD: (-1, 0),
+    Action.BACKWARD: (1, 0),
+    Action.RIGHT: (0, 1),
+    Action.LEFT: (0, -1),
+}
+
+@dataclass(frozen=True) # Makes it so agents can't mutate results after returning
 class StepResult:
+    """
+    Structured return type for Agent.act().
+
+    action: the chosen discrete action.
+    info: optional metadata (epsilon used, policy source, debug values, etc.).
+    """
+    # I like data and debugging
     action: Action #this is the action 0-3
-    info: Dict[str, object] | None = None
-#info is an optional debug metadata (epsilon used, chosen policy, Q values, etc.)
-#I like data and debugging
+    info: Dict[str, Any] | None = None
+
     
 class Agent(Protocol):
     """
@@ -67,12 +98,12 @@ class Agent(Protocol):
 
     def learn(
         self, 
-        obs: Any, #Observation before the action was take
+        obs: Any,       #Observation before the action was take
         action: Action, #Action chosen by the agent at that state
-        reward: float, #Rewards are how the AI knows if it did something good or bad. 
-                       #It floats because the value is dependent on which model and what action it takes.
-        next_obs: Any, #Observation resulting from the action.
-        done: bool #Idicates whether the episode has terminated.
+        reward: float,  #Rewards are how the AI knows if it did something good or bad. 
+                        #It floats because the value is dependent on which model and what action it takes.
+        next_obs: Any,  #Observation resulting from the action.
+        done: bool      #Idicates whether the episode has terminated.
     ) -> None:
         """
         Ubdate the agent's internal state based on the transition

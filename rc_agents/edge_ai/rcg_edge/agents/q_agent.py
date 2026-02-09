@@ -19,7 +19,12 @@ from typing import Any, Dict, Hashable #Hashable allows us to safely key the Q-t
 
 import numpy as np #used for fast argmax, arrays, and stable math.
 
+
 from .base import Action, StepResult #imports shared actino space and results container from the base agent
+
+# Ordered action list used to map Q-table indices → Action enums.
+# This centralizes action ordering and simplifies future extensions.
+_ACTIONS = tuple(Action)
 
 @dataclass
 class QConfig:
@@ -49,6 +54,9 @@ class QAgent:
         self.config = config if config is not None else QConfig()
         self.rng = np.random.default_rng(seed)
 
+        # Transient per-episode state (cleared in reset()).
+        self.last_action: Action | None = None
+
         #Q-table maps state -> array of Q-values 
         #once for each possible action in that state.
         #q_table[state] will be ~ array([Q_forward, Q_backward, Q_right, Q_left]).
@@ -57,66 +65,69 @@ class QAgent:
     #helper to ensure state exists in Q-table
     #convert observation to hashable type (tuple, string, etc.)
     #for use as dictionary key in q_table
+    # NOTE about tuples:
+    # - A tuple is an ordered, immutable collection of values.
+    # - Immutability means the contents cannot change after creation.
+    # - Because tuples are immutable, they are hashable and can be used
+    #   safely as dictionary keys.
+    # - In this project, (row, col) tuples represent fixed grid positions
+    #   and serve as stable state identifiers for the Q-table.
+    # - Lists are not used here because they are mutable and not hashable.
+
     def _state_key(self, obs: Any) -> Hashable:
-        """Convert an observation into a hashable key for the Q-table"""
+        """
+        Convert an observation into a hashable key for the Q-table
+        """
         if isinstance(obs, np.ndarray):
             return tuple(obs)  # Convert numpy array to tuple for hashing
         if isinstance(obs, tuple):
             return obs  # Already hashable
         return str(obs)
     
+    # NOTE: Q-table size grows with the number of visited states.
+    # Unvisited states are initialized lazily on first encounter.
     def _ensure_state(self, key: Hashable) -> np.ndarray:
-        """Ensure the given state key exists in the Q-table, initializing if necessary."""
+        """
+        Ensure the given state key exists in the Q-table, 
+        initializing if necessary.
+        """
         if key not in self.q_table:
             # Initialize Q-values for all actions to zero
-            self.q_table[key] = np.zeros(len(Action), dtype=float)
+            self.q_table[key] = np.zeros(len(_ACTIONS), dtype=float)
+
         return self.q_table[key]
     
     def reset(self) -> None:
-        """Reset the agent's internal state (not the Q-table)."""
-        return None
+        """
+        Reset per-episode internal state.
+
+        NOTE:
+        - The Q-table persists across episodes.
+        - Transient episode-level state (e.g., last action taken)
+        is cleared here.
+        """
+        self.last_action = None
+
 
     def act(self, obs: Any) -> StepResult:
         key = self._state_key(obs)
         q_values = self._ensure_state(key)
 
-        # epsilon-greedy selection
+        # epsilon-greedy selection:
+        # - explore with probability epsilon
+        # - otherwise exploit the current best-known action
         if self.rng.random() < self.config.epsilon:
-            # explore: random action
-            
-            actions_list = list(Action)
-            # actions_list is all possible actions as defined in base.py:
-            # ACTION_FORWARD, ACTION_BACKWARD, ACTION_RIGHT, ACTION_LEFT
-            
-            action_index = self.rng.integers(0, len(actions_list))
-            # action_index is part of the *exploration* phase of the epsilon-greedy policy.
-            # It is explicitly NOT the exploitation phase.
-            # This line ignores all learned values and chooses from actions_list at random.
-            #
-            # Broken down:
-            # self        -> the agent
-            # .rng        -> the agent's random number generator
-            # .integers() -> generate a random integer
-            # 0           -> starting index of the list
-            # len(...)    -> number of possible actions (4)
-            
-            action = actions_list[action_index]
-            # Uses the randomly generated index to select the next action from the list.
-
+            # Explore: choose a random action (ignore Q-values)
+            action = _ACTIONS[int(self.rng.integers(0, len(_ACTIONS)))]
+            self.last_action = action
             return StepResult(action=action, info={"policy": "explore"})
-            # Returns the chosen action and records that it was selected through exploration.
 
-        # exploitation of exlore: chooses action with highest Q-value.
-        # Results from the exploration section are stored then ranked.
-        best_index = int(np.argmax(q_values))
-        # Convert index back to Action enum
-        actions_list = list(Action)
-        action = actions_list[best_index]
-        # Returns the best action and records that it was selected through exploitation.
-
+        # Exploit: choose the action with highest Q(s, a)
+        action = _ACTIONS[int(np.argmax(q_values))]
+        self.last_action = action
         return StepResult(action=action, info={"policy": "exploit"})
-        ## Returns the chosen action and records that it was selected through exploitation.
 
+        
     def learn(
         self,
         obs: Any,
@@ -132,7 +143,7 @@ class QAgent:
         q_s = self._ensure_state(s)
         q_s2 = self._ensure_state(s2)
 
-        a_index = int(action)  # Action enum values (0-3) directly match array indices
+        a_index = int(action)  # Action IntEnum values map directly to Q-value array indices.
         # Q-agent only learns from non-terminal states
         # A non-terminal state is any state where the episode is still in progress
         # (done == False). In these states, the agent can still act and expects
