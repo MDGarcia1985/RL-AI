@@ -25,3 +25,5 @@ These conventions are used consistently across environments, agents, runners,
 and UI code to improve readability and reduce ambiguity.
 
 These conventions are documented explicitly to support readability for students and contributors who may be new to larger Python codebases.
+
+https://docs.pytest.org/en/stable/
