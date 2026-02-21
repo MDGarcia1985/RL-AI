@@ -1,5 +1,8 @@
 python -m streamlit run .\rc_agents\ui\app_streamlit.py
 
+To use testing:
+pythong -m pytest -q
+
 
 This interface is documented rather than enforced to keep the code
 lightweight and readable for this assignment. In a larger system—such

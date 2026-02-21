@@ -18,8 +18,16 @@ michael@mandedesign.studio
 
 CSC370 Spring 2026
 """
-
 from __future__ import annotations
+
+import logging
+
+# Configure logging only if not already configured
+if not logging.getLogger().hasHandlers():
+    logging.basicConfig(
+        level=logging.INFO,  # or DEBUG
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
 
 from rc_agents.envs import GridEnv
 from rc_agents.edge_ai.rcg_edge.agents import QAgent

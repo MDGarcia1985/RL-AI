@@ -16,6 +16,8 @@ CSC370 Spring 2026
 from .base import Action, StepResult, Agent
 from .q_agent import QConfig, QAgent
 from .random_agent import RandomAgent
+from .rl_agent import RLAgent, RLConfig
+from .rlf_agent import RLFAgent, RLFConfig
 
 __all__ = [
     "Action",
