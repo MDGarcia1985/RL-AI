@@ -17,6 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, List, Protocol
 
+from .convergence_tracker import ConvergenceTracker
 from rc_agents.config.ui_config import TrainingUIConfig
 from rc_agents.edge_ai.rcg_edge.agents import Action, StepResult
 
@@ -59,6 +60,24 @@ def run_training(
     """Run episodes of interaction between env and agent."""
     results: List[EpisodeResult] = []
 
+    # ------------------------------------------------------------------
+    # Convergence tracking
+    #
+    # Tracks rolling performance to detect:
+    # - Perfect win-rate windows
+    # - Win-rate plateau (saturation)
+    # - Efficiency plateau (steps-to-goal)
+    #
+    # NOTE:
+    # - This does NOT alter training behavior.
+    # - It only observes and records metrics.
+    # ------------------------------------------------------------------
+    tracker = ConvergenceTracker(
+        window=min(200, cfg.episodes),  # Avoid oversized window
+        delta=0.005,
+        patience=5,
+    )
+
     # Optional deterministic seeding.
     # RNG seeding is applied once per training run to ensure reproducibility
     # while preserving stochastic exploration within episodes.
@@ -92,6 +111,7 @@ def run_training(
             action: Action = step_result.action  # IntEnum; safe to pass as int
 
             next_obs, reward, done, info = env.step(int(action))
+            done = bool(done)  # normalize (handles numpy.bool_ and other truthy types)           
             total_reward += float(reward)
 
             agent.learn(               # Order matters here.
@@ -99,23 +119,36 @@ def run_training(
                 action=action,         # What it did.
                 reward=float(reward),  # What it got.
                 next_obs=next_obs,     # What happened next.
-                done=bool(done),       # Whether the episode ended.
+                done=done,       # Whether the episode ended.
             )
 
             obs = next_obs # Updates observation for next iteration.
             if done:
                 break # End episode early if terminal state is reached.
 
+        # reached_goal is intentionally derived from info when available.
+        # This future-proofs the runner when we add terminal failure states.
+        reached_goal = bool(info.get("reached_goal", done))
+
         # Record episode metrics for UI display and debugging.
         results.append(
-            # NOTE: reached_goal currently mirrors `done` because the env only terminates on goal.
-            # If terminal failure states are added later, use `info` (e.g., info["reached_goal"])
+            
             EpisodeResult(
                 episode=ep,
                 steps=steps,
                 total_reward=total_reward,
-                reached_goal=done,
+                reached_goal=reached_goal,
             )
         )
+
+        # Update convergence tracker AFTER episode result is finalized
+        tracker.update(
+            reached_goal=reached_goal,
+            steps=steps,
+        )
+
+    # Expose convergence summary without breaking the current return type.
+    # NOTE: This is intentionally lightweight. UI can surface it later.
+    agent.convergence_summary = tracker.summary()
 
     return results
