@@ -149,20 +149,14 @@ def sidebar_config() -> tuple[TrainingUIConfig, str, List[str]]:
         )
 
         # Reset button for agents (clear all cached agents).
-        # Refactor: with multi-agent UI we clear any agent-related session keys
-        # (agent, agent_key, agent_grid) so the next run builds fresh agents.
-        # NOTE: Keys like agent_cb_* are Streamlit widget keys; we only clear
-        # our own agent state to avoid breaking the sidebar.
+        # We only clear the specific session keys we own (agent store, save target,
+        # grid/key metadata). We do NOT delete keys that start with "agent_"
+        # in a loop, because that would remove Streamlit widget keys like
+        # agent_cb_rl, agent_cb_rlf (checkbox state), breaking the sidebar.
         if st.button("Reset Agents (clear Q-tables)"):
-            for key in list(st.session_state.keys()):
-                if key.startswith("agent_") and key != "agent_key":
+            for key in ("agent", "agent_key", "agent_grid", "agent_store", "agent_key_store", "agent_grid_store"):
+                if key in st.session_state:
                     del st.session_state[key]
-            if "agent" in st.session_state:
-                st.session_state.agent = None
-            if "agent_key" in st.session_state:
-                st.session_state.agent_key = None
-            if "agent_grid" in st.session_state:
-                st.session_state.agent_grid = None
             st.success("Agents reset.")
 
         st.divider()
