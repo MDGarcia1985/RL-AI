@@ -186,7 +186,9 @@ def render_main_panel(*, cfg, game_type: str, selected_agent_ids: List[str]) -> 
 
         if cached is not None and getattr(cached, "q_table", None) is not None and stored_key == key and stored_grid == current_grid:
             agent = cached
-        elif cached is not None and getattr(cached, "q_table", None) is not None and stored_grid != current_grid:
+        elif cached is not None and getattr(cached, "q_table", None) is not None and stored_key == key and stored_grid != current_grid:
+            # Transfer only when hyperparameters (key) are unchanged; grid size changed.
+            # If key changed too, we must not transfer (Q-values were learned under different alpha/gamma/epsilon/seed).
             agent = make_agent(agent_id, cfg)
             transfer_q_table(cached, agent, rows_i, cols_i)
             st.info(f"[{label}] Transferred Q-table from {stored_grid} to {current_grid}.")
