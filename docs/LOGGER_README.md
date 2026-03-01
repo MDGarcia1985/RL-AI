@@ -16,7 +16,7 @@ We treat logging as an application concern, not a library concern.
 
 Agents (rl_agent.py, rlf_agent.py, q_agent.py, etc.) never configure logging.
 
-Entry points (__main__.py, app_streamlit.py) configure logging.
+Entry points (`__main__.py` for CLI, `app_streamlit.py` for Streamlit) configure logging.
 
 Logging is centralized and inherited by all modules.
 
@@ -90,11 +90,7 @@ Other frameworks that may preconfigure logging
 Without this guard, duplicate log lines can occur.
 
 Where Logging Should and Should Not Be Configured
-Correct Locations
-
-__main__.py
-
-app_streamlit.py
+Correct locations: `__main__.py` (CLI), `app_streamlit.py` (Streamlit). Only these application entry points should call `logging.basicConfig(...)`.
 
 Incorrect Locations
 

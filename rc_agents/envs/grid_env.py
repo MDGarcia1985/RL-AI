@@ -148,8 +148,10 @@ class GridEnv: #defines env object
 
         # check for goal
         if self.pos == self.config.goal:
-            reward = 0.0 # reward is 0 if you reach the goal
-            done = True # done is true if you reach the goal
+            reward = 0.0  # reward is 0 if you reach the goal
+            done = True  # done is true if you reach the goal
 
-        info: Dict[str, object] = {"pos": self.pos} # info is a dictionary for additional info (empty for now)
+        # info: pos for debugging; reached_goal so train_runner (and MazeEnv contract) get
+        # a consistent key. Runner uses info.get("reached_goal", done) for terminal states.
+        info: Dict[str, object] = {"pos": self.pos, "reached_goal": done}
         return self.pos, reward, done, info

@@ -34,7 +34,7 @@ _ALLOWED_OPS = {
 }
 
 
-def safe_eval_number(expr: str) -> float:
+def _safe_eval_number(expr: str) -> float:
     """
     Evaluate a numeric expression safely and return float.
 
@@ -56,6 +56,7 @@ def safe_eval_number(expr: str) -> float:
 
     node = ast.parse(expr, mode="eval")
 
+    # Evaluate the expression, and return the result
     def _eval(n):
         if isinstance(n, ast.Expression):
             return _eval(n.body)
@@ -68,3 +69,13 @@ def safe_eval_number(expr: str) -> float:
         raise ValueError("unsupported expression")
 
     return float(_eval(node))
+
+
+# ---------------------------------------------------------------------------
+# Public aliases (kept for readability in higher-level modules)
+# NOTE:
+# - We keep the underscore-prefixed functions as the canonical implementation.
+# - These aliases let higher-level modules import without "private" naming.
+# ---------------------------------------------------------------------------
+
+safe_eval_number = _safe_eval_number

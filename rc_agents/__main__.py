@@ -59,7 +59,8 @@ def main() -> None:
     agent = QAgent(cfg.to_q_config(), seed=cfg.seed)
 
     # Run the shared training loop (package core logic).
-    results = run_training(env=env, agent=agent, cfg=cfg)
+    # run_training returns (results, best_trajectory); CLI only uses results
+    results, _ = run_training(env=env, agent=agent, cfg=cfg)
     wins = sum(1 for r in results if r.reached_goal)
     
     print(f"Reached goal: {wins}/{len(results)}")

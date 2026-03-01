@@ -15,7 +15,9 @@ CSC370 Spring 2026
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Protocol
+from typing import Any, Dict, List, Optional, Protocol, Tuple
+
+import numpy as np
 
 from .convergence_tracker import ConvergenceTracker
 from rc_agents.config.ui_config import TrainingUIConfig
@@ -52,13 +54,38 @@ class EpisodeResult:
     reached_goal: bool
 
 
+# ---------------------------------------------------------------------------
+# Trajectory recording (refactor: for "best run" trail viz in main_panel)
+# ---------------------------------------------------------------------------
+
+def _obs_to_pos(obs: Any) -> Tuple[int, int]:
+    """
+    Convert observation to (row, col) for trajectory recording.
+    GridEnv and MazeEnv both use (row, col) as obs; support tuple, list, or
+    numpy array so we stay generic for the Env protocol.
+    """
+    if isinstance(obs, (tuple, list)) and len(obs) >= 2:
+        return (int(obs[0]), int(obs[1]))
+    if isinstance(obs, np.ndarray) and obs.size >= 2:
+        return (int(obs.flat[0]), int(obs.flat[1]))
+    return (0, 0)
+
+
 def run_training(
     env: Env,
     agent: Any,
-    cfg: TrainingUIConfig, # This loads user input for learning parameters.
-) -> List[EpisodeResult]:
-    """Run episodes of interaction between env and agent."""
+    cfg: TrainingUIConfig,  # This loads user input for learning parameters.
+) -> Tuple[List[EpisodeResult], Optional[List[Tuple[int, int]]]]:
+    """
+    Run episodes of interaction between env and agent.
+    Returns (results, best_trajectory).
+    best_trajectory: list of (row, col) for the best successful run (fewest steps
+    to goal), or None if no episode reached the goal. Used by main_panel for
+    the "Best run (trail)" graph.
+    """
     results: List[EpisodeResult] = []
+    best_trajectory: Optional[List[Tuple[int, int]]] = None
+    best_steps: Optional[int] = None  # fewest steps among runs that reached_goal
 
     # ------------------------------------------------------------------
     # Convergence tracking
@@ -97,42 +124,51 @@ def run_training(
             pass
 
     for ep in range(1, cfg.episodes + 1):
-        obs = env.reset() # Starts a fresh episode.
-        agent.reset() # Starts a fresh episode for the agent.
+        obs = env.reset()  # Starts a fresh episode.
+        agent.reset()  # Starts a fresh episode for the agent.
 
-        total_reward = 0.0 # Resets reward accumulator for the episode.
+        # Refactor: record full path (row, col) each step for best-run trail viz.
+        # We only keep the single best trajectory (fewest steps to goal) to avoid
+        # storing one path per episode.
+        trajectory: List[Tuple[int, int]] = [_obs_to_pos(obs)]
+        total_reward = 0.0  # Resets reward accumulator for the episode.
         steps = 0
-        done = False # Tracks whether the episode has terminated.
+        done = False  # Tracks whether the episode has terminated.
 
-        for _ in range(cfg.max_steps): # Safety limit to prevent infinite wandering.
+        for _ in range(cfg.max_steps):  # Safety limit to prevent infinite wandering.
             steps += 1
 
             step_result: StepResult = agent.act(obs)
             action: Action = step_result.action  # IntEnum; safe to pass as int
 
             next_obs, reward, done, info = env.step(int(action))
-            done = bool(done)  # normalize (handles numpy.bool_ and other truthy types)           
+            done = bool(done)  # normalize (handles numpy.bool_ and other truthy types)
             total_reward += float(reward)
+            trajectory.append(_obs_to_pos(next_obs))  # extend path for this episode
 
-            agent.learn(               # Order matters here.
-                obs=obs,               # What it saw.
-                action=action,         # What it did.
-                reward=float(reward),  # What it got.
-                next_obs=next_obs,     # What happened next.
-                done=done,       # Whether the episode ended.
+            agent.learn(
+                obs=obs,
+                action=action,
+                reward=float(reward),
+                next_obs=next_obs,
+                done=done,
             )
 
-            obs = next_obs # Updates observation for next iteration.
+            obs = next_obs
             if done:
-                break # End episode early if terminal state is reached.
+                break
 
         # reached_goal is intentionally derived from info when available.
         # This future-proofs the runner when we add terminal failure states.
         reached_goal = bool(info.get("reached_goal", done))
 
-        # Record episode metrics for UI display and debugging.
+        # Keep best trajectory: among episodes that reached the goal, the one
+        # with fewest steps. main_panel uses this for the single "Best run (trail)" graph.
+        if reached_goal and (best_steps is None or steps < best_steps):
+            best_steps = steps
+            best_trajectory = list(trajectory)
+
         results.append(
-            
             EpisodeResult(
                 episode=ep,
                 steps=steps,
@@ -141,14 +177,8 @@ def run_training(
             )
         )
 
-        # Update convergence tracker AFTER episode result is finalized
-        tracker.update(
-            reached_goal=reached_goal,
-            steps=steps,
-        )
+        tracker.update(reached_goal=reached_goal, steps=steps)
 
     # Expose convergence summary without breaking the current return type.
-    # NOTE: This is intentionally lightweight. UI can surface it later.
     agent.convergence_summary = tracker.summary()
-
-    return results
+    return (results, best_trajectory)

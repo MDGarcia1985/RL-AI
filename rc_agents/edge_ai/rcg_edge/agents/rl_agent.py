@@ -23,7 +23,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, Hashable
 
-import numpy as np
+import io  # Used for in-memory bytes objects (Streamlit upload/download).
+from pathlib import Path  # Cross-platform path handling.
+import numpy as np  # used for fast argmax, arrays, and stable math.
 
 from .base import Action, StepResult
 
@@ -143,3 +145,85 @@ class RLAgent:
 
         q_s[a_index] = q_s[a_index] + self.config.alpha * (target - q_s[a_index])
         return None
+
+    # -------------------------------------------------------------------------
+    # Persistence: NPZ (portable) save/load for progressive learning across runs
+    #
+    # Format: same as QAgent — states (N,2), qvals (N,num_actions), alpha, gamma,
+    # epsilon, num_actions, fmt. allow_pickle=False on load for safety.
+    # -------------------------------------------------------------------------
+
+    def to_bytes(self) -> bytes:
+        """
+        Serialize Q-table + hyperparameters into a compressed .npz blob (bytes).
+
+        Assumes Phase 1 state keys are (row, col) tuples.
+        Non-(row,col) keys are ignored (future-proofing if you later add richer states).
+        """
+        buf = io.BytesIO()
+
+        states: list[list[int]] = []
+        qvals: list[np.ndarray] = []
+
+        for k, v in self.q_table.items():
+            if isinstance(k, tuple) and len(k) == 2:
+                r, c = int(k[0]), int(k[1])
+                states.append([r, c])
+                qvals.append(np.asarray(v, dtype=float))
+            else:
+                # TODO: Support non-grid state keys with a more general serializer.
+                continue
+
+        # Empty q_table: write (0,2) and (0,num_actions) so from_bytes gets valid arrays.
+        if len(states) == 0:
+            states_arr = np.zeros((0, 2), dtype=int)
+            qvals_arr = np.zeros((0, len(_ACTIONS)), dtype=float)
+        else:
+            states_arr = np.asarray(states, dtype=int)
+            qvals_arr = np.stack(qvals, axis=0).astype(float, copy=False)
+
+        np.savez_compressed(
+            buf,
+            states=states_arr,
+            qvals=qvals_arr,
+            alpha=float(self.config.alpha),
+            gamma=float(self.config.gamma),
+            epsilon=float(self.config.epsilon),
+            num_actions=int(len(_ACTIONS)),
+            fmt=np.array(["grid_tuple_v1"]),  # version tag for future format checks
+        )
+        return buf.getvalue()
+
+    @classmethod
+    def from_bytes(cls, data: bytes, seed: int | None = None) -> "RLAgent":
+        """
+        Reconstruct a RLAgent from bytes produced by to_bytes().
+        State keys are restored as (row, col) = (states[i,0], states[i,1]) to match save order.
+        """
+        buf = io.BytesIO(data)
+        z = np.load(buf, allow_pickle=False)  # safe: no unpickling of untrusted data
+
+        alpha = float(z["alpha"])
+        gamma = float(z["gamma"])
+        epsilon = float(z["epsilon"])
+
+        agent = cls(RLConfig(alpha=alpha, gamma=gamma, epsilon=epsilon), seed=seed)
+
+        states = z["states"]
+        qvals = z["qvals"]
+        # Column 0 = row, column 1 = col; qvals[i] is Q(s,a) for all actions at state (r,c).
+        for i in range(states.shape[0]):
+            r = int(states[i, 0])
+            c = int(states[i, 1])
+            agent.q_table[(r, c)] = np.asarray(qvals[i], dtype=float)
+
+        return agent
+
+    def save_npz(self, path: str | Path) -> None:
+        """Save Q-table to disk as .npz (Streamlit download / offline reuse)."""
+        Path(path).write_bytes(self.to_bytes())
+
+    @classmethod
+    def load_npz(cls, path: str | Path, seed: int | None = None) -> "RLAgent":
+        """Load Q-table from disk .npz; seed sets RNG for future exploration."""
+        return cls.from_bytes(Path(path).read_bytes(), seed=seed)

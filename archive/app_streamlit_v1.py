@@ -427,7 +427,11 @@ def sidebar_config() -> TrainingUIConfig:
 
 cfg = sidebar_config()
 
-# Main panel logic
+
+# ---------------------------------------------------------------------------
+# Main_Panel UI
+# ---------------------------------------------------------------------------
+
 run = st.button("Run Training", type="primary")
 
 # when "Run Training" is pressed it:

@@ -76,7 +76,7 @@ def test_runtime_q_agent_runs_end_to_end() -> None:
     env = GridEnv(cfg.to_grid_config())
     agent = QAgent(cfg.to_q_config(), seed=cfg.seed)
 
-    results = run_training(env=env, agent=agent, cfg=cfg)
+    results, _ = run_training(env=env, agent=agent, cfg=cfg)
 
     assert len(results) == cfg.episodes
     assert isinstance(agent.q_table, dict)
@@ -100,7 +100,7 @@ def test_runtime_rl_agent_runs_end_to_end() -> None:
     env = GridEnv(cfg.to_grid_config())
     agent = RLAgent(seed=cfg.seed)  # RLAgent has its own config defaults
 
-    results = run_training(env=env, agent=agent, cfg=cfg)
+    results, _ = run_training(env=env, agent=agent, cfg=cfg)
 
     assert len(results) == cfg.episodes
     assert len(agent.q_table) > 0
@@ -120,7 +120,7 @@ def test_runtime_rlf_agent_runs_end_to_end() -> None:
     env = GridEnv(cfg.to_grid_config())
     agent = RLFAgent(seed=cfg.seed)
 
-    results = run_training(env=env, agent=agent, cfg=cfg)
+    results, _ = run_training(env=env, agent=agent, cfg=cfg)
 
     assert len(results) == cfg.episodes
     assert len(agent.q_table) > 0

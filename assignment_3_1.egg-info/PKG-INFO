@@ -7,8 +7,13 @@ Description-Content-Type: text/markdown
 Requires-Dist: numpy
 Requires-Dist: matplotlib
 Requires-Dist: streamlit
+Provides-Extra: dev
+Requires-Dist: pytest>=9.0; extra == "dev"
 
 python -m streamlit run .\rc_agents\ui\app_streamlit.py
+
+To use testing:
+pythong -m pytest -q
 
 
 This interface is documented rather than enforced to keep the code

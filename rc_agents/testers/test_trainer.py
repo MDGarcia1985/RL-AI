@@ -122,7 +122,8 @@ def test_runner_calls_reset_once_per_episode() -> None:
     agent = FakeAgent()
     cfg = _cfg(episodes=3, max_steps=10)
 
-    results = run_training(env=env, agent=agent, cfg=cfg)
+    # run_training returns (results, best_trajectory); tests only assert on results
+    results, _ = run_training(env=env, agent=agent, cfg=cfg)
 
     assert len(results) == 3
     assert env.reset_calls == 3
@@ -134,7 +135,7 @@ def test_runner_stops_early_when_done() -> None:
     agent = FakeAgent()
     cfg = _cfg(episodes=1, max_steps=999)
 
-    results = run_training(env=env, agent=agent, cfg=cfg)
+    results, _ = run_training(env=env, agent=agent, cfg=cfg)
 
     assert len(results) == 1
     assert results[0].reached_goal is True
@@ -149,7 +150,7 @@ def test_runner_respects_max_steps_when_never_done() -> None:
     agent = FakeAgent()
     cfg = _cfg(episodes=1, max_steps=5)
 
-    results = run_training(env=env, agent=agent, cfg=cfg)
+    results, _ = run_training(env=env, agent=agent, cfg=cfg)
 
     assert len(results) == 1
     assert results[0].reached_goal is False
@@ -170,7 +171,7 @@ def test_runner_sets_reached_goal_from_info_when_present() -> None:
     agent = FakeAgent()
     cfg = _cfg(episodes=1, max_steps=10)
 
-    results = run_training(env=env, agent=agent, cfg=cfg)
+    results, _ = run_training(env=env, agent=agent, cfg=cfg)
     assert results[0].reached_goal is True
 
 
@@ -179,6 +180,38 @@ def test_runner_calls_env_seed_when_cfg_seed_set() -> None:
     agent = FakeAgent()
     cfg = _cfg(episodes=1, max_steps=10, seed=123)
 
-    _ = run_training(env=env, agent=agent, cfg=cfg)
+    _, _ = run_training(env=env, agent=agent, cfg=cfg)
 
     assert env.seed_calls == 1
+
+
+def test_runner_returns_best_trajectory_when_goal_reached() -> None:
+    """
+    run_training returns (results, best_trajectory).
+    When at least one episode reaches the goal, best_trajectory is the path (list of (r,c)) for the best run.
+    """
+    env = FakeEnv(done_after=2)
+    agent = FakeAgent()
+    cfg = _cfg(episodes=2, max_steps=10)
+
+    results, best_trajectory = run_training(env=env, agent=agent, cfg=cfg)
+
+    assert len(results) == 2
+    assert all(r.reached_goal for r in results)
+    assert best_trajectory is not None
+    assert isinstance(best_trajectory, list)
+    assert len(best_trajectory) >= 1
+    assert all(isinstance(p, tuple) and len(p) == 2 for p in best_trajectory)
+
+
+def test_runner_returns_none_best_trajectory_when_never_goal() -> None:
+    """When no episode reaches the goal, best_trajectory is None."""
+    env = FakeEnv(done_after=10_000)
+    agent = FakeAgent()
+    cfg = _cfg(episodes=1, max_steps=3)
+
+    results, best_trajectory = run_training(env=env, agent=agent, cfg=cfg)
+
+    assert len(results) == 1
+    assert results[0].reached_goal is False
+    assert best_trajectory is None

@@ -124,6 +124,10 @@ class QAgent:
 
     # -------------------------------------------------------------------------
     # Persistence: NPZ (portable) save/load for progressive learning across runs
+    #
+    # Format: .npz with arrays [states (N,2) row,col | qvals (N,num_actions)],
+    # scalars alpha, gamma, epsilon, num_actions, and format tag fmt.
+    # allow_pickle=False on load to avoid arbitrary code execution from untrusted files.
     # -------------------------------------------------------------------------
 
     def to_bytes(self) -> bytes:
@@ -147,6 +151,7 @@ class QAgent:
                 # TODO: Support non-grid state keys with a more general serializer.
                 continue
 
+        # Empty q_table: write (0,2) and (0,num_actions) so from_bytes gets valid arrays.
         if len(states) == 0:
             states_arr = np.zeros((0, 2), dtype=int)
             qvals_arr = np.zeros((0, len(_ACTIONS)), dtype=float)
@@ -162,7 +167,7 @@ class QAgent:
             gamma=float(self.config.gamma),
             epsilon=float(self.config.epsilon),
             num_actions=int(len(_ACTIONS)),
-            fmt=np.array(["grid_tuple_v1"]),  # tiny version tag
+            fmt=np.array(["grid_tuple_v1"]),  # version tag for future format checks
         )
         return buf.getvalue()
 
@@ -170,9 +175,10 @@ class QAgent:
     def from_bytes(cls, data: bytes, seed: int | None = None) -> "QAgent":
         """
         Reconstruct a QAgent from bytes produced by to_bytes().
+        State keys are restored as (row, col) = (states[i,0], states[i,1]) to match save order.
         """
         buf = io.BytesIO(data)
-        z = np.load(buf, allow_pickle=False)
+        z = np.load(buf, allow_pickle=False)  # safe: no unpickling of untrusted data
 
         alpha = float(z["alpha"])
         gamma = float(z["gamma"])
@@ -182,7 +188,7 @@ class QAgent:
 
         states = z["states"]
         qvals = z["qvals"]
-
+        # Column 0 = row, column 1 = col; qvals[i] is Q(s,a) for all actions at state (r,c).
         for i in range(states.shape[0]):
             r = int(states[i, 0])
             c = int(states[i, 1])
@@ -191,10 +197,10 @@ class QAgent:
         return agent
 
     def save_npz(self, path: str | Path) -> None:
-        """Save Q-table to disk as .npz."""
+        """Save Q-table to disk as .npz (Streamlit download / offline reuse)."""
         Path(path).write_bytes(self.to_bytes())
 
     @classmethod
     def load_npz(cls, path: str | Path, seed: int | None = None) -> "QAgent":
-        """Load Q-table from disk .npz."""
+        """Load Q-table from disk .npz; seed sets RNG for future exploration."""
         return cls.from_bytes(Path(path).read_bytes(), seed=seed)

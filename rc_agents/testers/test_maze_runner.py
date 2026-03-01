@@ -23,7 +23,7 @@ CSC370 Spring 2026
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Tuple
+from typing import Any
 
 import numpy as np
 
@@ -60,7 +60,7 @@ class RightThenDownAgent:
 
         # Simple corridor strategy for our specific test maze:
         # If we're on top row, go RIGHT. Otherwise go DOWN.
-        if r == 0:
+        if r == 0 and c < 3:
             return StepResult(action=Action.RIGHT, info={"policy": "test"})
         return StepResult(action=Action.BACKWARD, info={"policy": "test"})
 
@@ -87,9 +87,9 @@ def test_maze_env_runs_under_training_runner_and_can_reach_goal() -> None:
     - at least one episode should reach the goal under a simple deterministic policy
 
     Maze layout:
-        S . . G
+        S . . .
         # # # .
-        . . . .
+        . . . G
         . . . .
 
     Corridor is top row, then down at last column if needed.
@@ -106,7 +106,7 @@ def test_maze_env_runs_under_training_runner_and_can_reach_goal() -> None:
         rows=rows,
         cols=cols,
         start=(0, 0),
-        goal=(0, 3),  # top-right
+        goal=(2, 3),  # As marked in the maze layout
         step_cost=-1.0,
         goal_reward=0.0,
         wall_penalty=-1.0,
@@ -116,10 +116,11 @@ def test_maze_env_runs_under_training_runner_and_can_reach_goal() -> None:
     )
     env = MazeEnv(cfg_env)
 
+    # Run training with a simple deterministic agent.
     agent = RightThenDownAgent()
     cfg = _cfg(episodes=3, max_steps=20, seed=123)
 
-    results = run_training(env=env, agent=agent, cfg=cfg)
+    results, _ = run_training(env=env, agent=agent, cfg=cfg)
 
     assert len(results) == 3
     assert agent.reset_calls == 3
@@ -155,5 +156,41 @@ def test_maze_env_reached_goal_comes_from_info_flag() -> None:
     agent = OneStepRightAgent()
     cfg = _cfg(episodes=1, max_steps=5)
 
-    results = run_training(env=env, agent=agent, cfg=cfg)
+    results, _ = run_training(env=env, agent=agent, cfg=cfg)
     assert results[0].reached_goal is True
+
+
+def test_runner_does_not_assume_done_means_goal() -> None:
+    """
+    Confirm runner does not assume:
+        reached_goal = done
+
+    This is a regression test for a bug where the runner
+    incorrectly used `done` as a synonym for `reached_goal`.
+    """
+    class DoneButNotGoalEnv:
+        name = "done_but_not_goal_env"
+
+        def reset(self):
+            return (0, 0)
+
+        def step(self, action: int):
+            # done=True but explicitly not goal
+            return (0, 0), -1.0, True, {"reached_goal": False}
+
+    class NoopAgent:
+        def reset(self) -> None:
+            return None
+
+        def act(self, obs: Any) -> StepResult:
+            return StepResult(action=Action.RIGHT, info={"policy": "test"})
+
+        def learn(self, obs: Any, action: Action, reward: float, next_obs: Any, done: bool) -> None:
+            return None
+
+    env = DoneButNotGoalEnv()
+    agent = NoopAgent()
+    cfg = _cfg(episodes=1, max_steps=5)
+
+    results, _ = run_training(env=env, agent=agent, cfg=cfg)
+    assert results[0].reached_goal is False

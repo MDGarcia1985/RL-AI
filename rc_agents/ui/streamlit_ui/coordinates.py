@@ -18,25 +18,48 @@ from __future__ import annotations
 import streamlit as st
 
 
-def clamp_int(v: int, lo: int, hi: int) -> int:
+# ---------------------------------------------------------------------------
+# Safe coordinate inputs (row, col)
+#
+# We want to be able to type:
+#   "(45, 56)"  or "45,56"  or "45 56"
+#
+# This will matter more later when we add:
+# - mazes
+# - multiple start corners
+# - agent-vs-agent tournaments
+#
+# Design intent:
+# - Keep UI flexible for humans
+# - Keep parsing safe and simple (no arbitrary eval)
+# ---------------------------------------------------------------------------
+
+def _clamp_int(v: int, lo: int, hi: int) -> int:
     return max(lo, min(hi, v))
 
 
-def parse_coord(raw: str) -> tuple[int, int]:
+def _parse_coord(raw: str) -> tuple[int, int]:
     """
-    Parse "(r,c)" or "r,c" or "r c" into (r, c).
+    Parse a coordinate string into (row, col) ints.
+
+    Accepted formats:
+    - "(45, 56)"
+    - "45,56"
+    - "45 56"
 
     NOTE:
-    - Strictly two integers.
-    - This is not an expression parser (on purpose).
+    - This is intentionally strict: only two integers.
+    - If you want expressions later (e.g., "60-1"), you can add it using _safe_eval_number().
     """
     s = raw.strip()
     if not s:
         raise ValueError("empty coordinate")
 
+    # Strip optional parentheses
     if s.startswith("(") and s.endswith(")"):
         s = s[1:-1].strip()
 
+    # Split by comma or whitespace
     if "," in s:
         parts = [p.strip() for p in s.split(",")]
     else:
@@ -45,10 +68,12 @@ def parse_coord(raw: str) -> tuple[int, int]:
     if len(parts) != 2:
         raise ValueError("coordinate must have exactly two values")
 
-    return (int(parts[0]), int(parts[1]))
+    r = int(parts[0]) # Row
+    c = int(parts[1]) # Collum
+    return (r, c)
 
-
-def text_coord(
+# Coordinates entered by text string
+def _text_coord(
     label: str,
     default: tuple[int, int],
     *,
@@ -59,15 +84,15 @@ def text_coord(
     """
     Sidebar text input -> (row, col) tuple.
 
-    Behavior:
-    - Keeps prior value if parsing fails
-    - Clamps to valid grid bounds
+    - Keeps prior value if parsing fails.
+    - Clamps to [0..rows-1] and [0..cols-1] so the env never receives illegal coordinates.
     """
     if key not in st.session_state:
         st.session_state[key] = f"({default[0]}, {default[1]})"
     if f"{key}_input" not in st.session_state:
         st.session_state[f"{key}_input"] = st.session_state[key]
 
+    # The actual input field
     raw = st.text_input(
         label,
         value=st.session_state[f"{key}_input"],
@@ -76,19 +101,32 @@ def text_coord(
     )
 
     try:
-        r, c = parse_coord(raw)
+        r, c = _parse_coord(raw) # Parse row, col from string
 
-        # Clamp so env never receives illegal coords.
-        r = clamp_int(r, 0, max(0, rows - 1))
-        c = clamp_int(c, 0, max(0, cols - 1))
+        # Clamp to valid grid bounds
+        r = _clamp_int(r, 0, max(0, rows - 1))
+        c = _clamp_int(c, 0, max(0, cols - 1))
 
-        st.session_state[key] = f"({r}, {c})"
+        st.session_state[key] = f"({r}, {c})" # Update session state
         st.session_state[f"{key}_input"] = st.session_state[key]
         return (r, c)
 
+    # If we get here, the value was invalid
     except Exception:
         # Silent fallback to last known-good coordinate.
         try:
-            return parse_coord(st.session_state[key])
+            return _parse_coord(st.session_state[key])
         except Exception:
             return default
+        
+
+# ---------------------------------------------------------------------------
+# Public aliases (kept for readability in higher-level modules)
+# NOTE:
+# - We keep the underscore-prefixed functions as the canonical implementation.
+# - These aliases let higher-level modules import without "private" naming.
+# ---------------------------------------------------------------------------
+
+text_coord = _text_coord
+parse_coord = _parse_coord
+clamp_int = _clamp_int

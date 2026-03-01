@@ -255,6 +255,18 @@ UI populates config → runner executes
 
 No training logic should ever live in UI files.
 
+Streamlit UI (current structure)
+
+Decision intent: one place to choose environment and agents, run training, and compare results without duplicating runner logic.
+
+Sidebar (sidebar_ui.py): Environment dropdown (Open World, Maze) from factory.get_env_options(); agent checkboxes built from agent_catalog (one per catalog entry). Hyperparameters (episodes, max steps, alpha, gamma, epsilon), grid size, start/goal. Reset Agents clears cached agents so the next run starts fresh. Save / Load offers download/upload of a learned Q-table (.npz) for agents that support to_bytes/from_bytes.
+
+Main panel (main_panel.py): Run Training builds env via factory.make_env(cfg, game_type) and, for each selected agent, either reuses the cached agent (same agent_key and grid), transfers Q-table (same key, grid size changed), or creates a new agent. run_training(env, agent, cfg) returns (results, best_trajectory). Each agent gets an expandable section (summary, Q-table, value heatmap, policy). Best run (trail) at the bottom uses best_trajectory (and env.walls when present) for the path plot.
+
+Progressive learning (progressive_learning.py): agent_store, agent_key_store, and agent_grid_store keyed by agent_id keep per-agent state across reruns. agent_key(cfg) is (alpha, gamma, epsilon, seed); when key and grid match, the same agent is reused. When only the grid changes, transfer_q_table(old_agent, new_agent, rows, cols) copies overlapping Q-values so learning is preserved when resizing the environment.
+
+Factory (factory.py): make_agent(agent_id, cfg) and make_env(cfg, game_type) centralize construction so the UI stays thin. get_env_options() returns the list of (value, label) for the environment dropdown. Heavy imports live inside factory functions to avoid import-time failures when adding new agents or envs.
+
 Logging & Traceability
 
 Execution logging exists for:
@@ -325,7 +337,7 @@ Pseudo-structure:
     for name, make_agent in AGENTS.items():
         agent = make_agent()
         env = GridEnv(cfg.to_grid_config())
-        results = run_training(env, agent, cfg)
+        results, best_trajectory = run_training(env, agent, cfg)
 
         wins = sum(r.reached_goal for r in results)
         avg_steps = sum(r.steps for r in results) / len(results)

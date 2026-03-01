@@ -19,7 +19,7 @@ This guide explains each in plain language.
 
 The main entry point of the package is:
 
-__main__
+**__main__** (run with `python -m rc_agents`)
 
 That file creates:
 
@@ -27,7 +27,7 @@ An environment (GridEnv)
 
 An agent (QAgent)
 
-A training loop (run_training)
+A training loop: `run_training(env, agent, cfg)`, which returns `(results, best_trajectory)` — a list of episode outcomes and, when at least one episode reached the goal, the path of the best run for visualization.
 
 The package structure is enabled by:
 
@@ -367,25 +367,15 @@ Read a dictionary access like q_table[state]
 
 10. ## Mental Model of the System
 
-Environment:
+**Environment:** Defines rules (grid or maze), rewards, and when an episode is done. Exposes `reset()` and `step(action)`.
 
-Defines rules
+**Agent:** Stores Q-table (for learning agents), chooses actions (`act(obs)`), and updates from experience (`learn(...)`).
 
-Agent:
+**Runner:** Loops episodes, calls `env.reset()` and `agent.reset()` each episode, then steps until done or max_steps. Returns `(results, best_trajectory)` so the UI can show summaries and the best path.
 
-Stores Q-table
+**UI (Streamlit):** Sidebar lets you pick environment and agents and set hyperparameters; main panel runs training and shows per-agent results plus a “Best run (trail)” graph. No training logic lives in the UI—it only builds config and calls the runner.
 
-Chooses actions
-
-Runner:
-
-Loops episodes
-
-UI:
-
-Displays results
-
-Everything else is organization.
+Everything else is organization (factory, progressive learning, viz).
 
 11. ## Rolling Windows, `deque`, and `.popleft()`
 
@@ -488,7 +478,7 @@ Where You Can See This in the Codebase
 
 See:
 
-rc_agents/rcg_edge/runners/convergence_tracker.py
+`rc_agents/edge_ai/rcg_edge/runners/convergence_tracker.py`
 
 Look at:
 

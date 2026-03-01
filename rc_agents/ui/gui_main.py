@@ -186,7 +186,8 @@ class TrainerGUI:
         env = GridEnv(cfg.to_grid_config())
         agent = QAgent(cfg.to_q_config(), seed=cfg.seed)
 
-        results = run_training(env=env, agent=agent, cfg=cfg)
+        # run_training returns (results, best_trajectory); Tk UI only uses results
+        results, _ = run_training(env=env, agent=agent, cfg=cfg)
 
         self._show_q_heatmap(env, agent)
 

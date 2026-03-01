@@ -13,10 +13,12 @@ CSC370 Spring 2026
 
 # Create 'from' path for dependencies
 from .grid_env import GridEnv, GridConfig
-__all__ = ["GridEnv", "GridConfig"]
+from .maze_env import MazeEnv, MazeConfig, ascii_maze_to_walls
 
-
-# Future note: 
-# Additional Environments can be added here.
-# Example:
-#         from .custom_env import CustomEnv
+__all__ = [
+    "GridEnv",
+    "GridConfig",
+    "MazeEnv",
+    "MazeConfig",
+    "ascii_maze_to_walls",
+]

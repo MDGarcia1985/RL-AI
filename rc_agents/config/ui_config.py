@@ -61,7 +61,7 @@ class TrainingUIConfig:
     seed: int | None = 123
 
     # Optional future: unify UI state instead of storing game_type in session_state
-    game_type: str = "Open World"
+    # game_type: str = "Open World"
 
     # ------------------------------------------------------------
     # Converters
@@ -83,12 +83,31 @@ class TrainingUIConfig:
             goal=self.goal,
         )
 
+    # def to_maze_config(self) -> "MazeConfig":
+    #    """
+    #    Convert UI settings into a MazeConfig object.
+    #
+    #       This is to generate different kinds of mazes from one source
+    #       of truth.
+    #    """
+    #    from ..envs import MazeConfig
+    #
+    #    return MazeConfig(
+    #        rows=self.rows,
+    #        cols=self.cols,
+    #        start=self.start,
+    #        goal=self.goal,
+    #        # walls gets filled by maze_runner (ascii/procedural/etc.)
+    #    )
+
     def to_q_config(self) -> "QConfig":
         """
         Convert UI settings into a QConfig object.
 
         Keeping this here prevents the UI layer from duplicating
         agent setup logic.
+
+        All agents share the same seed so as to be comparable in their performance.
         """
         from ..edge_ai.rcg_edge.agents import QConfig
 

@@ -1,3 +1,5 @@
+**Future / target layout** for rc_guardian (hardware integration and UGV stack). The current NNABL_POC project lives under `NNABL_POC/rc_agents/`; see `docs/PHASE_1.md` for that structure.
+
 rc_guardian/
 ├─ README.md
 ├─ pyproject.toml                 # python deps + tooling (ruff/black/pytest)

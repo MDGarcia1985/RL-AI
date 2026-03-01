@@ -17,15 +17,18 @@ CSC370 Spring 2026
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple
-
 import numpy as np
 import streamlit as st
 
 from rc_agents.config import TrainingUIConfig
-from rc_agents.edge_ai.rcg_edge.runners import run_training
-from rc_agents.envs import GridEnv
 
+
+# ---------------------------------------------------------------------------
+# Progressive learning: persist agent across Streamlit reruns
+#
+# Streamlit reruns the script top-to-bottom on every UI interaction.
+# st.session_state is our "memory" so training can be progressive across runs.
+# ---------------------------------------------------------------------------
 
 def ensure_state() -> None:
     """
@@ -35,34 +38,36 @@ def ensure_state() -> None:
     - Prevent KeyError and keep app deterministic.
     - Gives you clean named buckets for debugging.
     """
+    if "agent" not in st.session_state:
+        st.session_state.agent = None
+    # Optional: track the “context” so we can reset when the grid or hyperparams change.
+    if "agent_key" not in st.session_state:
+        st.session_state.agent_key = None
+    # Track the grid size associated with the current Q-table (used for transfer logic).
+    if "agent_grid" not in st.session_state:
+        st.session_state.agent_grid = None
+
+    # Per-agent cache for progressive learning (key/grid so we know when to reuse or transfer)
     if "agent_store" not in st.session_state:
-        st.session_state.agent_store = {}  # (agent_id, ctx_key) -> agent
+        st.session_state.agent_store = {}
+    if "agent_key_store" not in st.session_state:
+        st.session_state.agent_key_store = {}
+    if "agent_grid_store" not in st.session_state:
+        st.session_state.agent_grid_store = {}
     if "history_store" not in st.session_state:
-        st.session_state.history_store = {}  # agent_id -> results list
+        st.session_state.history_store = {}
     if "last_scoreboard" not in st.session_state:
-        st.session_state.last_scoreboard = []  # list[dict]
+        st.session_state.last_scoreboard = []
 
 
-def training_context_key(cfg: TrainingUIConfig, *, game_type: str) -> tuple:
+def _agent_key(cfg: TrainingUIConfig) -> tuple:
     """
-    Defines the training context.
+    Defines the agent identity context.
 
-    If any of these change, it should be treated like a different experiment.
-    That means new agent instance (fresh Q-table), unless you intentionally transfer.
-
-    Includes:
-    - env geometry (rows, cols)
-    - start/goal
-    - hyperparams (alpha/gamma/epsilon)
-    - seed
-    - game_type (open world vs maze)
+    If these change, we treat it as a new training context and create a fresh agent.
+    This prevents silently mixing Q-tables across incompatible hyperparameters.
     """
     return (
-        str(game_type),
-        int(cfg.rows),
-        int(cfg.cols),
-        tuple(cfg.start),
-        tuple(cfg.goal),
         float(cfg.alpha),
         float(cfg.gamma),
         float(cfg.epsilon),
@@ -70,165 +75,33 @@ def training_context_key(cfg: TrainingUIConfig, *, game_type: str) -> tuple:
     )
 
 
-def make_agent(agent_id: str, cfg: TrainingUIConfig):
+def _transfer_q_table(old_agent: object, new_agent: object, rows: int, cols: int) -> None:
     """
-    Agent factory.
+    Copy overlapping learned Q-values from old_agent into new_agent.
 
-    Why:
-    - UI shouldn't care about constructors.
-    - Keeps imports localized so broken WIP agents don't kill the whole UI.
+    Keeps any state (r,c) where 0<=r<rows and 0<=c<cols.
+    New states remain uninitialized (lazy zeros on first visit).
+    Works with any agent that has .q_table (QAgent, RLAgent, RLFAgent).
+
+    Design intent:
+    - Allows progressive learning when scaling the environment size.
+    - Avoids throwing away knowledge on small-to-large transitions.
     """
-    if agent_id == "rl":
-        from rc_agents.edge_ai.rcg_edge.agents.rl_agent import RLAgent, RLConfig
-        return RLAgent(RLConfig(alpha=cfg.alpha, gamma=cfg.gamma, epsilon=cfg.epsilon), seed=cfg.seed)
-
-    if agent_id == "rlf":
-        from rc_agents.edge_ai.rcg_edge.agents.rlf_agent import RLFAgent, RLFConfig
-        return RLFAgent(RLFConfig(alpha=cfg.alpha, gamma=cfg.gamma, epsilon=cfg.epsilon), seed=cfg.seed)
-
-    raise ValueError(f"Unknown agent_id: {agent_id}")
+    if not hasattr(old_agent, "q_table") or not hasattr(new_agent, "q_table"):
+        return
+    for k, v in old_agent.q_table.items():
+        if isinstance(k, tuple) and len(k) == 2:
+            r, c = int(k[0]), int(k[1])
+            if 0 <= r < rows and 0 <= c < cols:
+                new_agent.q_table[(r, c)] = np.asarray(v, dtype=float).copy()
 
 
-def make_env(cfg: TrainingUIConfig, *, game_type: str):
-    """
-    Environment factory.
+# ---------------------------------------------------------------------------
+# Public aliases (kept for readability in higher-level modules)
+# NOTE:
+# - We keep the underscore-prefixed functions as the canonical implementation.
+# - These aliases let higher-level modules import without "private" naming.
+# ---------------------------------------------------------------------------
 
-    Today:
-    - Open World -> GridEnv
-    - Maze -> MazeEnv (if present)
-
-    Future:
-    - Labyrinth -> different rules / multi-goals / hazard states
-    """
-    if game_type == "Open World":
-        return GridEnv(cfg.to_grid_config())
-
-    if game_type == "Maze":
-        from rc_agents.envs.maze_env import MazeEnv, MazeConfig  # adjust if your path differs
-        mcfg = MazeConfig(
-            rows=int(cfg.rows),
-            cols=int(cfg.cols),
-            start=tuple(cfg.start),
-            goal=tuple(cfg.goal),
-        )
-        return MazeEnv(mcfg)
-
-    raise NotImplementedError("Labyrinth is a future environment type.")
-
-
-def summarize_results(results) -> tuple[float, Optional[int], float]:
-    """
-    Summary metrics used in scoreboard.
-
-    Returns:
-        avg_steps_all: average steps across all episodes
-        best_steps_on_win: best single run (min steps among wins) or None
-        win_rate: wins / episodes
-    """
-    if not results:
-        return float("nan"), None, 0.0
-
-    avg_steps_all = float(np.mean([r.steps for r in results]))
-    wins = [r for r in results if bool(r.reached_goal)]
-    best_steps_on_win = min((r.steps for r in wins), default=None)
-    win_rate = float(len(wins) / len(results))
-    return avg_steps_all, best_steps_on_win, win_rate
-
-
-def convergence_fields(agent) -> tuple[Optional[int], Optional[str], Optional[int], Optional[int]]:
-    """
-    Pull convergence signals from the agent.
-
-    train_runner sets:
-        agent.convergence_summary = tracker.summary()
-
-    If agent hasn't trained yet, this will be missing.
-    """
-    s = getattr(agent, "convergence_summary", None)
-    if s is None:
-        return None, None, None, None
-
-    return (
-        getattr(s, "episode_first_saturation", None),
-        getattr(s, "saturation_reason", None),
-        getattr(s, "episode_first_perfect", None),
-        getattr(s, "episode_first_steps_plateau", None),
-    )
-
-
-def run_selected_agents(
-    *,
-    cfg: TrainingUIConfig,
-    game_type: str,
-    selected_agent_ids: List[str],
-) -> tuple[List[Dict[str, object]], Dict[str, object]]:
-    """
-    Core training driver for Streamlit.
-
-    Why:
-    - Keeps main_panel.py simple.
-    - Makes "run tournament" behavior testable later.
-
-    Returns:
-        scoreboard: list of dict rows for table display
-        details: dict payload for JSON export / debugging
-    """
-    ensure_state()
-
-    ctx_key = training_context_key(cfg, game_type=game_type)
-
-    scoreboard: List[Dict[str, object]] = []
-    details: Dict[str, object] = {}
-
-    for agent_id in selected_agent_ids:
-        env = make_env(cfg, game_type=game_type)
-        store_key = (agent_id, ctx_key)
-
-        if store_key not in st.session_state.agent_store:
-            st.session_state.agent_store[store_key] = make_agent(agent_id, cfg)
-
-        agent = st.session_state.agent_store[store_key]
-
-        results = run_training(env=env, agent=agent, cfg=cfg)
-        st.session_state.history_store[agent_id] = results
-
-        avg_steps, best_steps, win_rate = summarize_results(results)
-        sat_ep, sat_reason, perf_ep, steps_plateau_ep = convergence_fields(agent)
-
-        row = {
-            "agent": getattr(agent, "name", agent_id),
-            "win_rate": win_rate,
-            "avg_steps_all": avg_steps,
-            "best_steps_on_win": best_steps,
-            "saturation_ep": sat_ep,
-            "saturation_reason": sat_reason,
-            "perfect_ep": perf_ep,
-            "steps_plateau_ep": steps_plateau_ep,
-        }
-        scoreboard.append(row)
-
-        details[agent_id] = {
-            "agent": getattr(agent, "name", agent_id),
-            "context_key": list(ctx_key),
-            "cfg": {
-                "episodes": int(cfg.episodes),
-                "max_steps": int(cfg.max_steps),
-                "rows": int(cfg.rows),
-                "cols": int(cfg.cols),
-                "start": list(cfg.start),
-                "goal": list(cfg.goal),
-                "alpha": float(cfg.alpha),
-                "gamma": float(cfg.gamma),
-                "epsilon": float(cfg.epsilon),
-                "seed": int(cfg.seed or 0),
-                "game_type": str(game_type),
-            },
-            "scoreboard_row": row,
-            "convergence_summary": getattr(agent, "convergence_summary", None).__dict__
-            if getattr(agent, "convergence_summary", None) is not None
-            else None,
-            "episode_results": [r.__dict__ for r in results],
-        }
-
-    st.session_state.last_scoreboard = scoreboard
-    return scoreboard, details
+agent_key = _agent_key
+transfer_q_table = _transfer_q_table

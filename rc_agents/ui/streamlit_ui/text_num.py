@@ -24,7 +24,7 @@ import streamlit as st
 from .safe_eval_num import safe_eval_number
 
 
-def text_num(
+def _text_num(
     label: str,
     default: float,
     *,
@@ -37,10 +37,14 @@ def text_num(
     """
     Sidebar text input -> numeric value.
 
-    Behavior:
-    - Parses numbers and small expressions via safe_eval_number()
-    - Clamps if min_v/max_v are provided
-    - If parsing fails, returns prior value (or default if state is broken)
+    - Keeps the prior value if parsing fails.
+    - Optional clamp.
+    - Supports small expressions via _safe_eval_number().
+
+    NOTE on Streamlit state:
+    - st.session_state[key] stores "last known-good" normalized value as string
+    - st.session_state[f"{key}_input"] stores the live textbox content
+    - Keeping both prevents the UI from "fighting" the user while typing.
     """
     if key not in st.session_state:
         st.session_state[key] = str(default)
@@ -51,6 +55,7 @@ def text_num(
     if step_hint:
         help_txt += f" | Hint: {step_hint}"
 
+    # The actual input field
     raw = st.text_input(
         label,
         value=st.session_state[f"{key}_input"],
@@ -58,16 +63,17 @@ def text_num(
         help=help_txt,
     )
 
+    # Try to parse the input, with clamping and casting
     try:
         val = safe_eval_number(raw)
 
-        # Clamp if requested (prevents illegal env/config values).
+        # Clamp if requested
         if min_v is not None:
             val = max(min_v, val)
         if max_v is not None:
             val = min(max_v, val)
 
-        # Normalize display back into session (clean output).
+        # Store normalized display back into session (clean it up)
         if cast is int:
             val = int(round(val))
             st.session_state[key] = str(val)
@@ -79,9 +85,20 @@ def text_num(
         st.session_state[f"{key}_input"] = st.session_state[key]
         return val
 
+    # If parsing fails, warn the user and keep the previous value
     except Exception:
-        # Silent fallback to last-known-good value.
+        # Keep last known-good value
         try:
             return cast(float(st.session_state[key]))
         except Exception:
             return cast(default)
+        
+
+# ---------------------------------------------------------------------------
+# Public aliases (kept for readability in higher-level modules)
+# NOTE:
+# - We keep the underscore-prefixed functions as the canonical implementation.
+# - These aliases let higher-level modules import without "private" naming.
+# ---------------------------------------------------------------------------
+
+text_num = _text_num
