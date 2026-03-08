@@ -32,7 +32,7 @@ from typing import Any, List, Tuple
 import numpy as np
 
 from rc_agents.config import TrainingUIConfig
-from .agent_catalog import build_agent_catalog
+# remove module-level import
 
 
 # ---------------------------------------------------------------------------
@@ -71,6 +71,7 @@ def make_agent(agent_id: str, cfg: TrainingUIConfig) -> Any:
     Agents are created lazily to prevent import-time failures
     when experimenting with new architectures.
     """
+    from .agent_catalog import build_agent_catalog
     catalog = build_agent_catalog()
     spec = catalog.get(agent_id)
 
@@ -86,6 +87,7 @@ def agent_supports_qtable_io(agent_id: str) -> bool:
     Return whether the specified agent supports
     Q-table save/load functionality.
     """
+    from .agent_catalog import build_agent_catalog    
     catalog = build_agent_catalog()
     spec = catalog.get(agent_id)
     return bool(spec.supports_qtable_io) if spec else False
